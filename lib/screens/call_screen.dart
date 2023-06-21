@@ -33,7 +33,7 @@ class _CallScreenState extends State<CallScreen> {
   RTCPeerConnection? _rtcPeerConnection;
 
   // list of rtcCandidates to be sent over signalling
-  List<RTCIceCandidate> rtcIceCadidates = [];
+  List<RTCIceCandidate> rtcIceCandidates = [];
 
   // media status
   bool isAudioOn = true, isVideoOn = true, isFrontCameraSelected = true;
@@ -129,7 +129,7 @@ class _CallScreenState extends State<CallScreen> {
     else {
       // listen for local iceCandidate and add it to the list of IceCandidate
       _rtcPeerConnection!.onIceCandidate =
-          (RTCIceCandidate candidate) => rtcIceCadidates.add(candidate);
+          (RTCIceCandidate candidate) => rtcIceCandidates.add(candidate);
 
       // when call is accepted by remote peer
       socket!.on("callAnswered", (data) async {
@@ -142,7 +142,7 @@ class _CallScreenState extends State<CallScreen> {
         );
 
         // send iceCandidate generated to remote peer over signalling
-        for (RTCIceCandidate candidate in rtcIceCadidates) {
+        for (RTCIceCandidate candidate in rtcIceCandidates) {
           socket!.emit("IceCandidate", {
             "calleeId": widget.calleeId,
             "iceCandidate": {

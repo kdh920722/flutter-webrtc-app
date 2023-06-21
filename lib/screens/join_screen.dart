@@ -108,7 +108,7 @@ class _JoinScreenState extends State<JoinScreen> {
                         shape: RoundedRectangleBorder( //to set border radius to button
                             borderRadius: BorderRadius.circular(20)
                         ),
-                        backgroundColor: Color(0xffbb86fc)
+                        backgroundColor: const Color(0xffbb86fc)
                       ),
                       child: const Text(
                         "영상통화",

@@ -37,6 +37,11 @@ dependencies:
   cupertino_icons: ^1.0.2
   flutter_webrtc: ^0.9.20
   socket_io_client: ^2.0.1
+  get: ^4.3.8
+  get_storage: ^2.0.3
+  http: ^0.13.3
+  sdp_transform: ^0.3.2
+  assets_audio_player: ^3.0.3+6
 
 dev_dependencies:
   flutter_test:
