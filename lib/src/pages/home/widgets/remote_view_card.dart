@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart' as RTC;
+import 'package:flutter_webrtc/flutter_webrtc.dart';
 
 class RemoteViewCard extends StatefulWidget {
   final RTC.RTCVideoRenderer remoteRenderer;
@@ -33,13 +34,14 @@ class _RemoteViewCardState extends State<RemoteViewCard> {
           : FittedBox(
               fit: BoxFit.cover,
               child: Container(
-                height: size.width * .45,
-                width: size.width * .45,
-                child: Transform(
-                  transform: Matrix4.identity()..rotateY(0.0),
-                  alignment: FractionalOffset.center,
-                  child: Texture(textureId: widget.remoteRenderer.textureId!),
-                ),
+                height: size.width * .55,
+                width: size.width * .35,
+                child: RTCVideoView(
+                  widget.remoteRenderer,
+                  mirror: true,
+                  objectFit:
+                  RTCVideoViewObjectFit.RTCVideoViewObjectFitCover,
+                )
               ),
             ),
     );

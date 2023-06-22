@@ -13,6 +13,10 @@ class SocketEmit {
   }
 
   sendSdpForOut() {
-    socket.emit('OUT-CSS', {});
+    socket.emit('OUT-CSS',
+        {
+          "callerId": "1234"
+        }
+        );
   }
 }

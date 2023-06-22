@@ -1,11 +1,13 @@
 import 'dart:async';
+import 'dart:developer';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart' as RTC;
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 import 'package:flutter_webrtc_app/src/pages/home/widgets/remote_view_card.dart';
 import 'package:sdp_transform/sdp_transform.dart';
 import 'package:socket_io_client/socket_io_client.dart';
-
+import 'package:flutter/foundation.dart' as foundation;
 import '../../services/socket_emit.dart';
 
 bool isAudioOn = true, isVideoOn = true;
@@ -37,7 +39,7 @@ class HomePage extends StatefulWidget {
   State<StatefulWidget> createState() => _HomePageState();
 }
 
-class _HomePageState extends State<HomePage> {
+class _HomePageState extends State<HomePage> with WidgetsBindingObserver{
   List<Map<String, dynamic>> socketIdRemotes = [];
   late RTC.RTCPeerConnection _peerConnection;
   late RTC.MediaStream _localStream;
@@ -45,9 +47,12 @@ class _HomePageState extends State<HomePage> {
   bool _isSend = false;
   bool _isFrontCamera = true;
 
+  bool get isiOS => foundation.defaultTargetPlatform == foundation.TargetPlatform.iOS;
+
   @override
   void initState() {
     super.initState();
+    log('FinAppRootHome');
     initRenderers();
     _createPeerConnection().then(
       (pc) async {
@@ -69,6 +74,28 @@ class _HomePageState extends State<HomePage> {
     _localRenderer.dispose();
     super.dispose();
   }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    switch (state) {
+      case AppLifecycleState.resumed:
+        log('FinAppRootHome resumed');
+        break;
+      case AppLifecycleState.inactive:
+        log('FinAppRootHome inactive');
+        break;
+      case AppLifecycleState.detached:
+        log('FinAppRootHome detached');
+        // DO SOMETHING!
+        break;
+      case AppLifecycleState.paused:
+        log('FinAppRootHome paused');
+        break;
+      default:
+        break;
+    }
+  }
+
 
   _switchCamera() async {
     if (_localStream != null) {
@@ -160,7 +187,7 @@ class _HomePageState extends State<HomePage> {
       });
     });
 
-    socket.on('OUT-PEER-SSC', (data) async {
+    socket.on('OUT-PEER-SSC', (data) {
       String outUser = data['socketId'];
       int index = socketIdRemotes.indexWhere((item) => item['socketId'] == outUser);
       if (index != -1) {
@@ -169,7 +196,9 @@ class _HomePageState extends State<HomePage> {
       }
     });
 
-    socket.onDisconnect((_) => print('disconnect'));
+    socket.onDisconnect((_){
+
+    });
   }
 
   initRenderers() async {
@@ -242,12 +271,26 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future sendOut() async {
-    SocketEmit().sendSdpForOut();
+    await SocketEmit().sendSdpForOut();
+    _endCall();
+    if(!isiOS){
+      SystemChannels.platform.invokeMethod('SystemNavigator.pop');
+    }else{
+      socketIdRemotes.clear();
+      setState(() {});
+    }
   }
 
   _getUserMedia() async {
     RTC.MediaStream stream = await RTC.navigator.mediaDevices.getUserMedia({
-      'audio': true,
+      'audio': {
+        'sampleRate': 16000,
+        'sampleSize': 16,
+        'volume': 0.3,
+        'echoCancellation': false,
+        'noiseSuppression': false,
+        'autoGainControl': true
+    },
       'video': {
         'facingMode': 'user',
       },
@@ -260,7 +303,7 @@ class _HomePageState extends State<HomePage> {
     return stream;
   }
 
-  _endCall() async {
+  _endCall() {
     _peerConnection.close();
     _localStream.dispose();
     _localRenderer.dispose();
@@ -290,10 +333,17 @@ class _HomePageState extends State<HomePage> {
   @override
   Widget build(BuildContext context) {
     Size size = MediaQuery.of(context).size;
+    double w = MediaQuery.of(context).size.width - MediaQuery.of(context).padding.left - MediaQuery.of(context).padding.right;
+    double h = MediaQuery.of(context).size.height - MediaQuery.of(context).padding.top - MediaQuery.of(context).padding.bottom;
     return Scaffold(
+      appBar: AppBar(
+        backgroundColor: Colors.amber,
+        toolbarHeight: 60,
+        elevation: 5,
+        title: const Text('META CALL', style: TextStyle(color: Colors.black)),
+        centerTitle: true,
+      ),
       body: Container(
-        height: size.height,
-        width: size.width,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.center,
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -302,8 +352,8 @@ class _HomePageState extends State<HomePage> {
               children: [
                 Container(
                   color: Colors.black,
-                  width: size.width,
-                  height: size.height,
+                  width: w,
+                  height: h-60,
                   child: socketIdRemotes.isEmpty
                       ? Container()
                       : RemoteViewCard(
@@ -317,7 +367,7 @@ class _HomePageState extends State<HomePage> {
                   child: Container(
                     color: Colors.transparent,
                     width: size.width,
-                    height: size.width * .25,
+                    height: size.width * .35,
                     child: socketIdRemotes.length < 2
                         ? Container()
                         : ListView.builder(
@@ -359,21 +409,12 @@ class _HomePageState extends State<HomePage> {
                           : FittedBox(
                               fit: BoxFit.cover,
                               child: Container(
-                                height: size.width * .50,
-                                width: size.width * .32,
                                 decoration: BoxDecoration(
                                   borderRadius: BorderRadius.all(Radius.circular(6.0)),
                                   border: Border.all(color: Colors.amberAccent, width: 2.0),
                                 ),
-                                child: Transform(
-                                  transform: Matrix4.identity()..rotateY(0.0),
-                                  alignment: FractionalOffset.center,
-                                  child: RTCVideoView(
-                                    _localRenderer,
-                                    mirror: true,
-                                    objectFit:
-                                    RTCVideoViewObjectFit.RTCVideoViewObjectFitCover,
-                                  ),
+                                child: RemoteViewCard(
+                                  remoteRenderer: _localRenderer,
                                 ),
                               ),
                             ),
@@ -423,7 +464,7 @@ class _HomePageState extends State<HomePage> {
                             height: 8.0,
                           ),
                           GestureDetector(
-                            onTap: () => _endCall(),
+                            onTap: () => sendOut(),
                             child: Container(
                                 height: size.width * .125,
                                 width: size.width * .125,
