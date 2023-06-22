@@ -11,6 +11,7 @@ import 'package:flutter/foundation.dart' as foundation;
 import '../../services/socket_emit.dart';
 
 bool isAudioOn = true, isVideoOn = true;
+const String roomId = "YSMETA02";
 
 Map<String, dynamic> configuration = {
   'iceServers': [
@@ -260,18 +261,18 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver{
   Future sendSdpForBroadcast(
     String sdp,
   ) async {
-    SocketEmit().sendSdpForBroadcase(sdp);
+    SocketEmit().sendSdpForBroadcase(sdp, roomId);
   }
 
   Future sendSdpOnlyReceive(
     String sdp,
     String socketId,
   ) async {
-    SocketEmit().sendSdpForReceive(sdp, socketId);
+    SocketEmit().sendSdpForReceive(sdp, socketId, roomId);
   }
 
   Future sendOut() async {
-    await SocketEmit().sendSdpForOut();
+    await SocketEmit().sendSdpForOut(roomId);
     _endCall();
     if(!isiOS){
       SystemChannels.platform.invokeMethod('SystemNavigator.pop');
