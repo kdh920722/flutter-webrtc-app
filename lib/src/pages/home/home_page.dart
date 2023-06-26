@@ -11,7 +11,7 @@ import 'package:flutter/foundation.dart' as foundation;
 import '../../services/socket_emit.dart';
 
 bool isAudioOn = true, isVideoOn = true;
-const String roomId = "YSMETA02";
+String roomId = "";
 
 Map<String, dynamic> configuration = {
   'iceServers': [
@@ -42,36 +42,24 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> with WidgetsBindingObserver{
   List<Map<String, dynamic>> socketIdRemotes = [];
-  late RTC.RTCPeerConnection _peerConnection;
-  late RTC.MediaStream _localStream;
+  RTC.RTCPeerConnection? _peerConnection;
+  RTC.MediaStream? _localStream;
   final RTC.RTCVideoRenderer _localRenderer = RTC.RTCVideoRenderer();
   bool _isSend = false;
   bool _isFrontCamera = true;
-
   bool get isiOS => foundation.defaultTargetPlatform == foundation.TargetPlatform.iOS;
+  final roomIdTextEditingController = TextEditingController();
 
   @override
   void initState() {
     super.initState();
-    log('FinAppRootHome');
-    initRenderers();
-    _createPeerConnection().then(
-      (pc) async {
-        _peerConnection = pc;
-        _localStream = await _getUserMedia();
-        _localStream.getTracks().forEach((track) {
-          _peerConnection.addTrack(track, _localStream);
-        });
-        setState(() {});
-      },
-    );
-    connectAndListen();
   }
 
   @override
   void dispose() {
-    _peerConnection.close();
-    _localStream.dispose();
+    roomIdTextEditingController.dispose();
+    _peerConnection?.close();
+    _localStream?.dispose();
     _localRenderer.dispose();
     super.dispose();
   }
@@ -97,12 +85,29 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver{
     }
   }
 
+  _init(){
+    roomIdTextEditingController.text = "";
+    initRenderers();
+    _createPeerConnection().then(
+          (pc) async {
+        _peerConnection = pc;
+        _localStream = await _getUserMedia();
+        _localStream?.getTracks().forEach((track) {
+          _peerConnection?.addTrack(track, _localStream!);
+        });
+        setState(() {});
+      },
+    );
+    connectAndListen();
+    setState(() {});
+  }
 
   _switchCamera() async {
-    if (_localStream != null) {
-      bool value = await _localStream.getVideoTracks()[0].switchCamera();
+    final localStream = _localStream;
+    if (localStream != null) {
+      bool value = await localStream.getVideoTracks()[0].switchCamera();
       while (value == _isFrontCamera) {
-        value = await _localStream.getVideoTracks()[0].switchCamera();
+        value = await localStream.getVideoTracks()[0].switchCamera();
       }
       _isFrontCamera = value;
       setState(() {});
@@ -208,7 +213,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver{
 
   void _setRemoteDescription(sdp) async {
     RTC.RTCSessionDescription description = RTC.RTCSessionDescription(sdp, 'answer');
-    await _peerConnection.setRemoteDescription(description);
+    await _peerConnection?.setRemoteDescription(description);
   }
 
   void _setRemoteDescriptionForReceive(indexSocket, sdp) async {
@@ -217,12 +222,12 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver{
   }
 
   _createOffer() async {
-    RTC.RTCSessionDescription description = await _peerConnection.createOffer({
+    RTC.RTCSessionDescription? description = await _peerConnection?.createOffer({
       'offerToReceiveVideo': true,
       'offerToReceiveAudio': true,
     });
-    _peerConnection.setLocalDescription(description);
-    var session = parse(description.sdp.toString());
+    _peerConnection?.setLocalDescription(description!);
+    var session = parse(description!.sdp.toString());
     String sdp = write(session, null);
     await sendSdpForBroadcast(sdp);
   }
@@ -305,8 +310,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver{
   }
 
   _endCall() {
-    _peerConnection.close();
-    _localStream.dispose();
+    _peerConnection?.close();
+    _localStream?.dispose();
     _localRenderer.dispose();
   }
 
@@ -314,7 +319,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver{
     // change status
     isAudioOn = !isAudioOn;
     // enable or disable audio track
-    _localStream.getAudioTracks().forEach((track) {
+    _localStream?.getAudioTracks().forEach((track) {
       track.enabled = isAudioOn;
     });
     setState(() {});
@@ -325,7 +330,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver{
     isVideoOn = !isVideoOn;
 
     // enable or disable video track
-    _localStream.getVideoTracks().forEach((track) {
+    _localStream?.getVideoTracks().forEach((track) {
       track.enabled = isVideoOn;
     });
     setState(() {});
@@ -345,21 +350,32 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver{
         centerTitle: true,
       ),
       body: Container(
+        color: Colors.black,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.center,
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Stack(
               children: [
-                Container(
+                _localRenderer.textureId == null
+                    ? Container(
+                  color: Colors.black,
+                  width: w,
+                  height: 200,
+                  child: socketIdRemotes.isEmpty
+                      ? Container()
+                      : RemoteViewCard(
+                          remoteRenderer: socketIdRemotes[0]['stream'],
+                        ),
+                ) : Container(
                   color: Colors.black,
                   width: w,
                   height: h-60,
                   child: socketIdRemotes.isEmpty
                       ? Container()
                       : RemoteViewCard(
-                          remoteRenderer: socketIdRemotes[0]['stream'],
-                        ),
+                    remoteRenderer: socketIdRemotes[0]['stream'],
+                  ),
                 ),
                 Positioned(
                   bottom: 20.0,
@@ -396,15 +412,60 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver{
                   top: 45.0,
                   left: 15.0,
                   child: Row(
-
                     children: [
                       _localRenderer.textureId == null
                           ? Container(
-                              height: size.width * .50,
-                              width: size.width * .32,
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.all(Radius.circular(6.0)),
-                                border: Border.all(color: Colors.amberAccent, width: 2.0),
+                              height: 150,
+                              width: w-30,
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.start,
+                               children: [
+                                 TextField(
+                                   style: const TextStyle(color: Colors.grey),
+                                   controller: roomIdTextEditingController,
+                                   textAlign: TextAlign.center,
+                                   cursorColor: Colors.grey,
+                                   decoration: InputDecoration(
+                                     focusedBorder: OutlineInputBorder(
+                                         borderSide: const BorderSide(color: Colors.amber),
+                                         borderRadius: BorderRadius.circular(10.0)
+                                     ),
+                                     enabledBorder: OutlineInputBorder(
+                                       borderSide: const BorderSide(color: Colors.amber),
+                                       borderRadius: BorderRadius.circular(10.0)
+                                     ),
+                                     hintText: "방 ID",
+                                     hintStyle: const TextStyle(color: Colors.grey),
+                                     alignLabelWithHint: true,
+                                     border: OutlineInputBorder(
+                                       borderRadius: BorderRadius.circular(20.0),
+                                     ),
+                                   ),
+                                 ),
+                                 SizedBox(height: 5.0),
+                                 ElevatedButton(
+                                   style: ElevatedButton.styleFrom(
+                                       fixedSize: Size(w-30,60),
+                                       shape: RoundedRectangleBorder( //to set border radius to button
+                                           borderRadius: BorderRadius.circular(10)
+                                       ),
+                                       backgroundColor: Colors.amber
+                                   ),
+                                   child: const Text(
+                                     "입장하기",
+                                     style: TextStyle(
+                                       fontSize: 14,
+                                       color: Colors.black,
+                                     ),
+                                   ),
+                                   onPressed: () {
+                                     if(roomIdTextEditingController.text.trim() != ""){
+                                       roomId = roomIdTextEditingController.text;
+                                       _init();
+                                     }
+                                   },
+                                 )
+                               ],
                               ),
                             )
                           : FittedBox(
@@ -419,10 +480,10 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver{
                                 ),
                               ),
                             ),
-                      SizedBox(
-                        width: 8.0,
-                      ),
-                      Column(
+                      _localRenderer.textureId == null
+                          ? Container() : SizedBox(width: 8.0),
+                      _localRenderer.textureId == null
+                          ? Container() : Column(
                         children: [
                           GestureDetector(
                             onTap: () => _switchCamera(),
