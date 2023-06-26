@@ -10,15 +10,16 @@ import 'package:socket_io_client/socket_io_client.dart';
 import 'package:flutter/foundation.dart' as foundation;
 import '../../services/socket_emit.dart';
 
+bool isConnected = false;
 bool isAudioOn = true, isVideoOn = true;
 String roomId = "";
-
 Map<String, dynamic> configuration = {
   'iceServers': [
     {
       'urls': [
         'stun:stun1.l.google.com:19302',
-        'stun:stun2.l.google.com:19302'
+        'stun:stun2.l.google.com:19302',
+
       ]
     },
     /*
@@ -48,6 +49,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver{
   bool _isSend = false;
   bool _isFrontCamera = true;
   bool get isiOS => foundation.defaultTargetPlatform == foundation.TargetPlatform.iOS;
+  bool get isAndroid => foundation.defaultTargetPlatform == foundation.TargetPlatform.android;
   final roomIdTextEditingController = TextEditingController();
 
   @override
@@ -95,6 +97,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver{
         _localStream?.getTracks().forEach((track) {
           _peerConnection?.addTrack(track, _localStream!);
         });
+        isConnected = true;
         setState(() {});
       },
     );
@@ -280,7 +283,13 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver{
     await SocketEmit().sendSdpForOut(roomId);
     _endCall();
     if(!isiOS){
-      SystemChannels.platform.invokeMethod('SystemNavigator.pop');
+      if(isAndroid) {
+        SystemChannels.platform.invokeMethod('SystemNavigator.pop');
+      } else {
+        socketIdRemotes.clear();
+        setState(() {});
+      }
+
     }else{
       socketIdRemotes.clear();
       setState(() {});
@@ -346,7 +355,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver{
         backgroundColor: Colors.amber,
         toolbarHeight: 60,
         elevation: 5,
-        title: const Text('META CALL', style: TextStyle(color: Colors.black)),
+        title:  const Text('META CALL', style: TextStyle(color: Colors.black)),
         centerTitle: true,
       ),
       body: Container(
@@ -357,7 +366,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver{
           children: [
             Stack(
               children: [
-                _localRenderer.textureId == null
+                !isConnected
                     ? Container(
                   color: Colors.black,
                   width: w,
@@ -413,7 +422,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver{
                   left: 15.0,
                   child: Row(
                     children: [
-                      _localRenderer.textureId == null
+                      !isConnected
                           ? Container(
                               height: 150,
                               width: w-30,
@@ -480,9 +489,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver{
                                 ),
                               ),
                             ),
-                      _localRenderer.textureId == null
+                      !isConnected
                           ? Container() : SizedBox(width: 8.0),
-                      _localRenderer.textureId == null
+                      !isConnected
                           ? Container() : Column(
                         children: [
                           GestureDetector(

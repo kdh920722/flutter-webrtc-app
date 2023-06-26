@@ -1,4 +1,4 @@
-package com.example.flutter_webrtc_app
+package com.ysmeta.metartc
 
 import io.flutter.embedding.android.FlutterActivity
 
