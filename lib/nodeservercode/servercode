@@ -61,7 +61,7 @@ async function createPeerConnectionSend(sdp, socketId, roomId) {
   const peer = new webrtc.RTCPeerConnection({
     iceServers: [
       {
-        urls: "stun:stun1.l.google.com:19302",
+        urls: "stun:stun.stunprotocol.org",
       },
     ],
   });
@@ -82,7 +82,7 @@ async function createPeerConnectionReceive(sdp, socketId, roomId) {
   const peer = new webrtc.RTCPeerConnection({
     iceServers: [
       {
-        urls: "stun:stun2.l.google.com:19302",
+        urls: "stun:stun.stunprotocol.org",
       },
     ],
   });
@@ -222,19 +222,20 @@ io.on("connection", function (socket) {
     console.log(" disconnected roomId[" + roomIdx + "] : " + roomId);
     console.log(" disconnected userId : " + socket.id);
     console.log("disconnected info end ==========>");
+    if(roomIdx != -1){
+      var userList = roomList[roomIdx].roomUserList;
+      roomList[roomIdx].roomUserList = userList.filter((e) => e.socketId != socket.id);
+      var otherUserList = userList.filter((e) => e.socketId != socket.id);
+      consoleLogRoomInfo();
 
-    var userList = roomList[roomIdx].roomUserList;
-    roomList[roomIndex].roomUserList = userList.filter((e) => e.socketId != data.userId);
-    var otherUserList = userList.filter((e) => e.socketId != socket.id);
-    consoleLogRoomInfo();
-
-    if(otherUserList.length > 0){
-      roomList[roomIdx].roomUserList = otherUserList;
-      otherUserList.forEach(function(user) {
-        io.to(user.socketId).emit("OUT_PEER_RESP", {
-          socketId: socket.id
+      if(otherUserList.length > 0){
+        roomList[roomIdx].roomUserList = otherUserList;
+        otherUserList.forEach(function(user) {
+          io.to(user.socketId).emit("OUT_PEER_RESP", {
+            socketId: socket.id
+          });
         });
-      });
+      }
     }
   });
 
