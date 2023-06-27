@@ -20,27 +20,26 @@ app.use(bodyParser.urlencoded({ extended: true }));
 
 app.get("/*", (req, res) => res.send("SFUs SERVER"));
 
-function handleTrackEvent(e, socketId, roomId) {
+function handleTrackEvent(e, userId, roomId) {
   const roomIndex = roomList.findIndex((item) => roomId === item.roomId);
   if(roomIndex != -1){
-    const userIndex = roomList[roomIndex].roomUserList.findIndex((item) => socketId === item.socketId);
+    const userIndex = roomList[roomIndex].roomUserList.findIndex((item) => userId === item.socketId);
     if(userIndex != -1){
       roomList[roomIndex].roomUserList[userIndex].stream = e.streams[0];
     }else{
       roomList[roomIndex].roomUserList.push({
-        socketId: socketId,
+        socketId: userId,
         stream: e.streams[0]
       });
     }
   }else{
     const roomUserList = [];
     roomUserList.push({
-      socketId: socketId,
+      socketId: userId,
       stream: e.streams[0],
     });
     roomList.push({
       roomId: roomId,
-      creator: socketId,
       roomUserList : roomUserList
     });
   }
@@ -62,7 +61,7 @@ async function createPeerConnectionSend(sdp, socketId, roomId) {
   const peer = new webrtc.RTCPeerConnection({
     iceServers: [
       {
-        urls: "stun:stun.stunprotocol.org",
+        urls: "stun:stun1.l.google.com:19302",
       },
     ],
   });
@@ -83,7 +82,7 @@ async function createPeerConnectionReceive(sdp, socketId, roomId) {
   const peer = new webrtc.RTCPeerConnection({
     iceServers: [
       {
-        urls: "stun:stun.stunprotocol.org",
+        urls: "stun:stun2.l.google.com:19302",
       },
     ],
   });
@@ -119,47 +118,51 @@ async function createPeerConnectionReceive(sdp, socketId, roomId) {
   return payload;
 }
 
-function consoleLogRoomInfo(list){
-  list.forEach(function(item) {
-    console.log("connected room info : " + item.roomId);
-    item.roomUserList.forEach(function(user) {
-      console.log("==>room user info : " + user.socketId);
+function consoleLogRoomInfo(){
+  console.log("roomList info start ==========>");
+    console.log("roomList size : " + roomList.length);
+    roomList.forEach(function(eachRoom, roomIndex) {
+      console.log(" room[" + roomIndex +"] : " + eachRoom.roomId);
+      eachRoom.roomUserList.forEach(function(user) {
+        console.log("   user in this room : " + user.socketId);
+      });
     });
-  });
+  console.log("roomList info end ==========>");
 }
 
-function consoleLogUserListInfo(list){
-  list.forEach(function(item) {
-    console.log("room user info : " + item.socketId);
-  });
-}
-
-function consoleLogUserListItemInfo(list){
-  list.forEach(function(item) {
-    console.log("room user info : " + item);
-  });
+function consoleLogOtherUserListInfo(list){
+  console.log("otherUserList info start ==========>");
+    list.forEach(function(otherId) {
+      console.log(" other user : " + otherId);
+    });
+  console.log("otherUserList info end ==========>");
 }
 
 io.on("connection", function (socket) {
-  console.log("connected socket id : " + socket.id);
-  socket.on("SEND-CSS", async function (data) {
-    const payload = await createPeerConnectionSend(data.sdp, socket.id, data.roomId);
-    consoleLogRoomInfo(roomList);
-    var userList = roomList.filter((e) => e.roomId == data.roomId)[0].roomUserList;
-    consoleLogUserListInfo(userList);
-    var otherUserList = userList.filter((e) => e.socketId != socket.id).map((e) => e.socketId);
-    consoleLogUserListItemInfo(otherUserList);
-    //const listSocketId = senderStreams.filter((e) => e.socketId != socket.id).map((e) => e.socketId);
+  console.log("connected id : " + socket.id);
+  io.to(socket.id).emit("CONNECTED_ID",{
+    socketId: socket.id
+  });
 
-    io.to(socket.id).emit("SEND-SSC", {
-      socketId: socket.id,
+  socket.on("INIT_PEER_REQ", async function (data) {
+    console.log("init peer id : " + data.userId);
+    const payload = await createPeerConnectionSend(data.sdp, data.userId, data.roomId);
+    const roomIndex = roomList.findIndex((e) => e.roomId === data.roomId);
+    var userList = roomList[roomIndex].roomUserList;
+    consoleLogRoomInfo();
+
+    var otherUserList = userList.filter((e) => e.socketId != data.userId).map((e) => e.socketId);
+    consoleLogOtherUserListInfo(otherUserList);
+
+    //const listSocketId = senderStreams.filter((e) => e.socketId != socket.id).map((e) => e.socketId);
+    io.to(data.userId).emit("INIT_PEER_RESP", {
       sdp: payload,
       sockets: otherUserList,
     });
 
     otherUserList.forEach(function(user) {
-      io.to(user).emit("NEW-PEER-SSC", {
-        socketId: socket.id
+      io.to(user).emit("INIT_NEW_PEER_RESP", {
+        socketId: data.userId
       });
     });
 
@@ -170,20 +173,25 @@ io.on("connection", function (socket) {
     */
   });
 
-  socket.on("RECEIVE-CSS", async function (data) {
-    console.log("connected other user : " +data.socketId);
-    const payload = await createPeerConnectionReceive(data.sdp, data.socketId, data.roomId);
-    io.to(socket.id).emit("RECEIVE-SSC", {
-      socketId: data.socketId,
+  socket.on("RECEIVE_PEER_REQ", async function (data) {
+    const payload = await createPeerConnectionReceive(data.sdp, data.otherUserId, data.roomId);
+    console.log("receive req : " + data.userId + " --> " + data.otherUserId);
+    io.to(data.userId).emit("RECEIVE_PEER_RESP", {
+      socketId: data.otherUserId,
       sdp: payload,
     });
   });
 
-  socket.on("OUT-CSS", async function (data) {
-    console.log("OUT room : " + data.roomId);
-    console.log("OUT user : " + socket.id);
-    var userList = roomList.filter((e) => e.roomId == data.roomId)[0].roomUserList;
-    var otherUserList = userList.filter((e) => e.socketId != socket.id).map((e) => e.socketId);
+  socket.on("OUT_PEER_REQ", async function (data) {
+    console.log("out info start ==========>");
+    console.log(" out roomId : " + data.roomId);
+    console.log(" out userId : " + data.userId);
+    console.log("out info end ==========>");
+    const roomIndex = roomList.findIndex((e) => e.roomId === data.roomId);
+    var userList = roomList[roomIndex].roomUserList;
+    roomList[roomIndex].roomUserList = userList.filter((e) => e.socketId != data.userId);
+
+    const otherUserList = userList.filter((e) => e.socketId != data.userId).map((e) => e.socketId);
     otherUserList.forEach(function(user) {
       io.to(user).emit("OUT-PEER-SSC", {
         socketId: socket.id
@@ -198,7 +206,6 @@ io.on("connection", function (socket) {
   });
 
   socket.on("disconnect", function () {
-    console.log("disconnected socket id : " + socket.id);
     //senderStreams = senderStreams.filter((e) => e.socketId !== socket.id);
 
     var roomIdx = -1;
@@ -211,30 +218,37 @@ io.on("connection", function (socket) {
         }
       });
     });
+    console.log("disconnected info start ==========>");
+    console.log(" disconnected roomId[" + roomIdx + "] : " + roomId);
+    console.log(" disconnected userId : " + socket.id);
+    console.log("disconnected info end ==========>");
+
     var userList = roomList[roomIdx].roomUserList;
+    roomList[roomIndex].roomUserList = userList.filter((e) => e.socketId != data.userId);
     var otherUserList = userList.filter((e) => e.socketId != socket.id);
+    consoleLogRoomInfo();
+
     if(otherUserList.length > 0){
       roomList[roomIdx].roomUserList = otherUserList;
       otherUserList.forEach(function(user) {
-        io.to(user.socketId).emit("OUT-PEER-SSC", {
+        io.to(user.socketId).emit("OUT_PEER_RESP", {
           socketId: socket.id
         });
       });
-
-    }else{
-      roomList = roomList.filter((e) => e.roomId != roomId);
     }
-    consoleLogRoomInfo(roomList);
-
-    /*
-    io.emit("OUT-PEER-SSC", {
-      socketId: socket.id,
-    });
-    */
-
   });
 
 });
+
+server.listen(port, ip.address(), function () {
+  const address = server.address()
+  console.log(`[scoket] on ${address.address}:${address.port}`)
+});
+
+/*
+=============================================================================================
+*/
+
 
 app.post("/broadcast", async ({ body }, res) => {
   console.log("broadcast");
@@ -257,7 +271,6 @@ app.post("/broadcast", async ({ body }, res) => {
 
   res.json(payload);
 });
-
 app.post("/consumer", async ({ body }, res) => {
   console.log("consumer");
   const peer = new webrtc.RTCPeerConnection({
@@ -282,9 +295,4 @@ app.post("/consumer", async ({ body }, res) => {
   };
 
   res.json(payload);
-});
-
-server.listen(port, ip.address(), function () {
-    const address = server.address()
-    console.log(`[scoket] on ${address.address}:${address.port}`)
 });

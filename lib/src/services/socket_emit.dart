@@ -1,23 +1,11 @@
 import '../pages/home/home_page.dart';
 
 class SocketEmit {
-  sendSdpForBroadcase(String sdp, String roomId) {
-    socket.emit('SEND-CSS', {'sdp': sdp, 'roomId' : roomId});
+  sendInitPeer(String sdp, String userId, String roomId) {
+    socket.emit('INIT_PEER_REQ', {'sdp': sdp, 'userId' : userId, 'roomId' : roomId});
   }
 
-  sendSdpForReceive(String sdp, String socketId, String roomId) {
-    socket.emit('RECEIVE-CSS', {
-      'sdp': sdp,
-      'socketId': socketId,
-      'roomId' : roomId
-    });
-  }
-
-  sendSdpForOut(String roomId) {
-    socket.emit('OUT-CSS',
-        {
-          'roomId' : roomId
-        }
-        );
+  sendReceivePeer(String sdp, String userId, String otherUserId, String roomId) {
+    socket.emit('RECEIVE_PEER_REQ', {'sdp': sdp, 'userId' : userId, 'otherUserId': otherUserId, 'roomId' : roomId});
   }
 }

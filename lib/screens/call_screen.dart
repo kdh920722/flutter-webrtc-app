@@ -43,7 +43,6 @@ class _CallScreenState extends State<CallScreen> {
     // initializing renderers
     _localRTCVideoRenderer.initialize();
     _remoteRTCVideoRenderer.initialize();
-
     // setup Peer Connection
     _setupPeerConnection();
     super.initState();

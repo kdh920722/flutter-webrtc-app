@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'dart:async';
+import 'dart:async';
 import 'dart:developer';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -9,18 +11,17 @@ import 'package:sdp_transform/sdp_transform.dart';
 import 'package:socket_io_client/socket_io_client.dart';
 import 'package:flutter/foundation.dart' as foundation;
 import '../../services/socket_emit.dart';
+import '../../shared/logger/logger_utils.dart';
 
 bool isConnected = false;
 bool isAudioOn = true, isVideoOn = true;
 String roomId = "";
+String myId = "";
+
 Map<String, dynamic> configuration = {
   'iceServers': [
     {
-      'urls': [
-        'stun:stun1.l.google.com:19302',
-        'stun:stun2.l.google.com:19302',
-
-      ]
+      'urls': ['stun:stun1.l.google.com:19302','stun:stun2.l.google.com:19302']
     },
     /*
     {
@@ -54,15 +55,24 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver{
 
   @override
   void initState() {
+    print("[KDH] ====================> initState ");
     super.initState();
   }
 
   @override
   void dispose() {
+    print("[KDH] ====================> dispose ");
+    myId = "";
+    roomId = "";
+    isConnected = false;
+    socket.disconnect();
+    socket.dispose();
+    socketIdRemotes.clear();
     roomIdTextEditingController.dispose();
     _peerConnection?.close();
     _localStream?.dispose();
     _localRenderer.dispose();
+    _isSend = false;
     super.dispose();
   }
 
@@ -70,17 +80,17 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver{
   void didChangeAppLifecycleState(AppLifecycleState state) {
     switch (state) {
       case AppLifecycleState.resumed:
-        log('FinAppRootHome resumed');
+        print("[KDH] ====================> resumed ");
         break;
       case AppLifecycleState.inactive:
-        log('FinAppRootHome inactive');
+        print("[KDH] ====================> inactive ");
         break;
       case AppLifecycleState.detached:
-        log('FinAppRootHome detached');
+        print("[KDH] ====================> detached ");
         // DO SOMETHING!
         break;
       case AppLifecycleState.paused:
-        log('FinAppRootHome paused');
+        print("[KDH] ====================> paused ");
         break;
       default:
         break;
@@ -88,21 +98,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver{
   }
 
   _init(){
-    roomIdTextEditingController.text = "";
-    initRenderers();
-    _createPeerConnection().then(
-          (pc) async {
-        _peerConnection = pc;
-        _localStream = await _getUserMedia();
-        _localStream?.getTracks().forEach((track) {
-          _peerConnection?.addTrack(track, _localStream!);
-        });
-        isConnected = true;
-        setState(() {});
-      },
-    );
     connectAndListen();
-    setState(() {});
   }
 
   _switchCamera() async {
@@ -117,11 +113,10 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver{
     }
   }
 
-  _createPeerConnectionAnswer(socketId) async {
+  _createPeerConnectionAnswer(socketId, index) async {
     RTC.RTCPeerConnection pc = await RTC.createPeerConnection(configuration);
 
     pc.onTrack = (track) {
-      int index = socketIdRemotes.indexWhere((item) => item['socketId'] == socketId);
       socketIdRemotes[index]['stream'].srcObject = track.streams[0];
       setState(() {});
     };
@@ -134,69 +129,87 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver{
   }
 
   void connectAndListen() async {
-    var urlConnectSocket = 'http://192.168.0.22:5000';
+    var urlConnectSocket = 'http://192.168.0.29:5000';
     socket = io(urlConnectSocket, OptionBuilder().enableForceNew().setTransports(['websocket']).build());
     socket.connect();
     socket.onConnect((_) {
-      socket.on('NEW-PEER-SSC', (data) async {
-        String newUser = data['socketId'];
-        RTC.RTCVideoRenderer stream = RTC.RTCVideoRenderer();
-        await stream.initialize();
-        setState(() {
+      socket.on('CONNECTED_ID', (data) async {
+        myId = data['socketId'];
+        roomIdTextEditingController.text = "";
+        initRenderers();
+        _createPeerConnection().then((pc) async {
+            _peerConnection = pc;
+            _localStream = await _getUserMedia();
+            _localStream?.getTracks().forEach((track) {
+              _peerConnection?.addTrack(track, _localStream!);
+            });
+            isConnected = true;
+            setState(() {});
+          },
+        );
+      });
+
+      socket.on('INIT_PEER_RESP', (data) async {
+        _setRemoteDescription(data['sdp']);
+        List<String> listSocketId = (data['sockets'] as List<dynamic>).map((e) => e.toString()).toList();
+        await Future.forEach(listSocketId, (element) async {
+          print("[KDH] ====================> init peer add other users $element");
+          RTC.RTCVideoRenderer stream = RTC.RTCVideoRenderer();
+          await stream.initialize();
           socketIdRemotes.add({
-            'socketId': newUser,
+            'socketId': element,
             'pc': null,
             'stream': stream,
           });
+          print("[KDH] ====================> init peer add other users ${socketIdRemotes.length}");
+          setState(() {});
         });
-        _createPeerConnectionAnswer(newUser).then((pcRemote) {
-          socketIdRemotes[socketIdRemotes.length - 1]['pc'] = pcRemote;
-          socketIdRemotes[socketIdRemotes.length - 1]['pc'].addTransceiver(
-            kind: RTC.RTCRtpMediaType.RTCRtpMediaTypeVideo,
-            init: RTC.RTCRtpTransceiverInit(
-              direction: RTC.TransceiverDirection.RecvOnly,
-            ),
-          );
-        });
-      });
-
-      socket.on('SEND-SSC', (data) {
-        List<String> listSocketId = (data['sockets'] as List<dynamic>).map((e) => e.toString()).toList();
-        listSocketId.asMap().forEach((index, user) async {
-          RTC.RTCVideoRenderer stream = RTC.RTCVideoRenderer();
-          await stream.initialize();
-          setState(() {
-            socketIdRemotes.add({
-              'socketId': user,
-              'pc': null,
-              'stream': stream,
-            });
-          });
-          _createPeerConnectionAnswer(user).then((pcRemote) {
+        listSocketId.asMap().forEach((index, otherUser) async {
+          _createPeerConnectionAnswer(otherUser, index).then((pcRemote) {
+            print("[KDH] ====================> init peer pc answer $index");
             socketIdRemotes[index]['pc'] = pcRemote;
             socketIdRemotes[index]['pc'].addTransceiver(
-              kind: RTC.RTCRtpMediaType.RTCRtpMediaTypeVideo,
-              init: RTC.RTCRtpTransceiverInit(
-                direction: RTC.TransceiverDirection.RecvOnly,
-              ),
+                kind: RTC.RTCRtpMediaType.RTCRtpMediaTypeVideo,
+                init: RTC.RTCRtpTransceiverInit(direction: RTC.TransceiverDirection.RecvOnly)
             );
+            setState(() {});
           });
         });
-
-        _setRemoteDescription(data['sdp']);
       });
 
-      socket.on('RECEIVE-SSC', (data) {
-        int index = socketIdRemotes.indexWhere(
-          (element) => element['socketId'] == data['socketId'],
-        );
+      socket.on('INIT_NEW_PEER_RESP', (data) async {
+        String newUser = data['socketId'];
+        print("[KDH] ====================> newUser $newUser");
+        RTC.RTCVideoRenderer stream = RTC.RTCVideoRenderer();
+        await stream.initialize();
+        socketIdRemotes.add({
+          'socketId': newUser,
+          'pc': null,
+          'stream': stream,
+        });
+        setState(() {});
+        int newUserIndex = socketIdRemotes.length - 1;
+        _createPeerConnectionAnswer(newUser, newUserIndex).then((pcRemote) {
+          print("[KDH] ====================> new peer pc answer $newUserIndex");
+          socketIdRemotes[newUserIndex]['pc'] = pcRemote;
+          socketIdRemotes[newUserIndex]['pc'].addTransceiver(
+            kind: RTC.RTCRtpMediaType.RTCRtpMediaTypeVideo,
+            init: RTC.RTCRtpTransceiverInit(direction: RTC.TransceiverDirection.RecvOnly)
+          );
+          setState(() {});
+        });
+      });
+
+      socket.on('RECEIVE_PEER_RESP', (data) {
+        int index = socketIdRemotes.indexWhere((element) => element['socketId'] == data['socketId']);
         if (index != -1) {
           _setRemoteDescriptionForReceive(index, data['sdp']);
         }
+        setState(() {});
       });
     });
 
-    socket.on('OUT-PEER-SSC', (data) {
+    socket.on('OUT_PEER_RESP', (data) {
       String outUser = data['socketId'];
       int index = socketIdRemotes.indexWhere((item) => item['socketId'] == outUser);
       if (index != -1) {
@@ -206,7 +219,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver{
     });
 
     socket.onDisconnect((_){
-
+      _endCall();
     });
   }
 
@@ -232,17 +245,17 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver{
     _peerConnection?.setLocalDescription(description!);
     var session = parse(description!.sdp.toString());
     String sdp = write(session, null);
-    await sendSdpForBroadcast(sdp);
+    await sendInitPeer(sdp);
   }
 
-  _createOfferForReceive(String socketId) async {
-    int index = socketIdRemotes.indexWhere((item) => item['socketId'] == socketId);
+  _createOfferForReceive(String otherUserId) async {
+    int index = socketIdRemotes.indexWhere((item) => item['socketId'] == otherUserId);
     if (index != -1) {
       RTC.RTCSessionDescription description = await socketIdRemotes[index]['pc'].createOffer();
       socketIdRemotes[index]['pc'].setLocalDescription(description);
       var session = parse(description.sdp.toString());
       String sdp = write(session, null);
-      await sendSdpOnlyReceive(sdp, socketId);
+      await sendReceivePeer(sdp, myId, otherUserId);
     }
   }
 
@@ -266,34 +279,22 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver{
     return pc;
   }
 
-  Future sendSdpForBroadcast(
+  Future sendInitPeer(
     String sdp,
   ) async {
-    SocketEmit().sendSdpForBroadcase(sdp, roomId);
+    SocketEmit().sendInitPeer(sdp, myId, roomId);
   }
 
-  Future sendSdpOnlyReceive(
+  Future sendReceivePeer(
     String sdp,
-    String socketId,
+    String userId,
+    String otherUserId,
   ) async {
-    SocketEmit().sendSdpForReceive(sdp, socketId, roomId);
+    SocketEmit().sendReceivePeer(sdp, userId, otherUserId, roomId);
   }
 
-  Future sendOut() async {
-    await SocketEmit().sendSdpForOut(roomId);
+  _sendOutPeer() async {
     _endCall();
-    if(!isiOS){
-      if(isAndroid) {
-        SystemChannels.platform.invokeMethod('SystemNavigator.pop');
-      } else {
-        socketIdRemotes.clear();
-        setState(() {});
-      }
-
-    }else{
-      socketIdRemotes.clear();
-      setState(() {});
-    }
   }
 
   _getUserMedia() async {
@@ -319,9 +320,19 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver{
   }
 
   _endCall() {
+    socket.disconnect();
     _peerConnection?.close();
-    _localStream?.dispose();
-    _localRenderer.dispose();
+    socketIdRemotes.clear();
+    _isSend = false;
+    myId = "";
+    roomId = "";
+    isAudioOn = true;
+    isVideoOn = true;
+    isConnected = false;
+    if(isAndroid) {
+      SystemChannels.platform.invokeMethod('SystemNavigator.pop');
+    }
+    setState((){});
   }
 
   _toggleMic() {
@@ -535,7 +546,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver{
                             height: 8.0,
                           ),
                           GestureDetector(
-                            onTap: () => sendOut(),
+                            onTap: () => _sendOutPeer(),
                             child: Container(
                                 height: size.width * .125,
                                 width: size.width * .125,

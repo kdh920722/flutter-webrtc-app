@@ -39,8 +39,7 @@ class _RemoteViewCardState extends State<RemoteViewCard> {
                 child: RTCVideoView(
                   widget.remoteRenderer,
                   mirror: true,
-                  objectFit:
-                  RTCVideoViewObjectFit.RTCVideoViewObjectFitCover,
+                  objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover,
                 )
               ),
             ),
