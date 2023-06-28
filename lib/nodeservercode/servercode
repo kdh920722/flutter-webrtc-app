@@ -13,6 +13,57 @@ const io = require("socket.io")(server, {
 const port = 5000;
 let senderStreams = [];
 var roomList = [];
+const iceServerList = [
+      {urls: "stun:stun.stunprotocol.org",},
+      {urls: "stun:stun.l.google.com:19302",},
+      {urls: "stun:stun1.l.google.com:19302",},
+      {urls: "stun:stun2.l.google.com:19302",},
+      {urls: "stun:stun3.l.google.com:19302",},
+      {urls: "stun:stun4.l.google.com:19302",},
+      {urls: "stun:stun.voippro.com:3478",},
+      {urls: "stun:stun.voipraider.com:3478",},
+      {urls: "stun:stun.voipstunt.com:3478",},
+      {urls: "stun:stun.voipwise.com:3478",},
+      {urls: "stun:stun.voipzoom.com:3478",},
+      {urls: "stun:stun.vopium.com:3478",},
+      {urls: "stun:stun.voxgratia.org:3478",},
+      {urls: "stun:stun.voxox.com:3478",},
+      {urls: "stun:stun.voys.nl:3478",},
+      {urls: "stun:stun.voztele.com:3478",},
+      {urls: "stun:stun.vyke.com:3478",},
+      {urls: "stun:stun.webcalldirect.com:3478",},
+      {urls: "stun:stun.whoi.edu:3478",},
+      {urls: "stun:stun.wifirst.net:3478",},
+      {urls: "stun:stun.wwdl.net:3478",},
+      {urls: "stun:stun.xs4all.nl:3478",},
+      {urls: "stun:stun.xtratelecom.es:3478",},
+      {urls: "stun:stun.yesss.at:3478",},
+      {urls: "stun:stun.zadarma.com:3478",},
+      {urls: "stun:stun.zadv.com:3478",},
+      {urls: "stun:stun.zoiper.com:3478",},
+      {urls : "stun:stun.lowratevoip.com:3478",},
+{urls : "stun:stun.lugosoft.com:3478",},
+{urls : "stun:stun.lundimatin.fr:3478",},
+{urls : "stun:stun.magnet.ie:3478",},
+{urls : "stun:stun.manle.com:3478",},
+{urls : "stun:stun.mgn.ru:3478",},
+{urls : "stun:stun.mit.de:3478",},
+{urls : "stun:stun.mitake.com.tw:3478",},
+{urls : "stun:stun.miwifi.com:3478",},
+{urls : "stun:stun.modulus.gr:3478",},
+{urls : "stun:stun.mozcom.com:3478",},
+{urls : "stun:stun.myvoiptraffic.com:3478",},
+{urls : "stun:stun.mywatson.it:3478",},
+{urls : "stun:stun.nas.net:3478",},
+{urls : "stun:stun.neotel.co.za:3478",},
+{urls : "stun:stun.netappel.com:3478",},
+{urls : "stun:stun.netappel.fr:3478",},
+{urls : "stun:stun.netgsm.com.tr:3478",},
+{urls : "stun:stun.nfon.net:3478",},
+{urls : "stun:stun.noblogs.org:3478",},
+{urls : "stun:stun.noc.ams-ix.net:3478",},
+{urls : "stun:stun.node4.co.uk:3478",},
+    ];
 
 app.use(express.static("public"));
 app.use(bodyParser.json());
@@ -59,12 +110,11 @@ function handleTrackEvent(e, userId, roomId) {
 
 async function createPeerConnectionSend(sdp, socketId, roomId) {
   const peer = new webrtc.RTCPeerConnection({
-    iceServers: [
-      {
-        urls: "stun:stun.stunprotocol.org",
-      },
-    ],
+    iceServers: iceServerList
   });
+
+
+
   peer.ontrack = (e) => handleTrackEvent(e, socketId, roomId);
   const sdpDesc = {
     type: "offer",
@@ -80,11 +130,7 @@ async function createPeerConnectionSend(sdp, socketId, roomId) {
 
 async function createPeerConnectionReceive(sdp, socketId, roomId) {
   const peer = new webrtc.RTCPeerConnection({
-    iceServers: [
-      {
-        urls: "stun:stun.stunprotocol.org",
-      },
-    ],
+    iceServers: iceServerList
   });
   const sdpDesc = {
     type: "offer",
@@ -97,6 +143,7 @@ async function createPeerConnectionReceive(sdp, socketId, roomId) {
   if(roomIndex != -1){
     const index = roomList[roomIndex].roomUserList.findIndex((e) => e.socketId === socketId);
     if (roomList[roomIndex].roomUserList.length > 0) {
+      console.log("stream info : " + roomList[roomIndex].roomUserList[index].stream);
       roomList[roomIndex].roomUserList[index].stream
         .getTracks()
         .forEach((track) => peer.addTrack(track, roomList[roomIndex].roomUserList[index].stream));
