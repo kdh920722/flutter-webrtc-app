@@ -1,17 +1,12 @@
 import 'dart:async';
-import 'dart:async';
-import 'dart:async';
-import 'dart:developer';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart' as RTC;
-import 'package:flutter_webrtc/flutter_webrtc.dart';
 import 'package:flutter_webrtc_app/src/pages/home/widgets/remote_view_card.dart';
 import 'package:sdp_transform/sdp_transform.dart';
 import 'package:socket_io_client/socket_io_client.dart';
 import 'package:flutter/foundation.dart' as foundation;
 import '../../services/socket_emit.dart';
-import '../../shared/logger/logger_utils.dart';
 
 bool isConnected = false;
 bool isAudioOn = true, isVideoOn = true;
@@ -20,19 +15,42 @@ String myId = "";
 
 Map<String, dynamic> configuration = {
   'iceServers': [
-    {
-      'urls': ['stun:stun1.l.google.com:19302','stun:stun2.l.google.com:19302']
-    },
+    {"urls" : "stun:stun.stunprotocol.org",},
+    {"urls" : "stun:stun.l.google.com:19302",},
+    {"urls" : "stun:stun1.l.google.com:19302",},
+    {"urls" : "stun:stun2.l.google.com:19302",},
+    {"urls" : "stun:stun3.l.google.com:19302",},
+    {"urls" : "stun:stun4.l.google.com:19302",},
+    {"urls" : "stun:stun.voippro.com:3478",},
+    {"urls" : "stun:stun.voipraider.com:3478",},
+    {"urls" : "stun:stun.voipstunt.com:3478",},
+    {"urls" : "stun:stun.voipwise.com:3478",},
+    {"urls" : "stun:stun.voipzoom.com:3478",},
+    {"urls" : "stun:stun.vopium.com:3478",},
+    {"urls" : "stun:stun.voxgratia.org:3478",},
+    {"urls" : "stun:stun.voxox.com:3478",},
+    {"urls" : "stun:stun.voys.nl:3478",},
+    {"urls" : "stun:stun.voztele.com:3478",},
+    {"urls" : "stun:stun.vyke.com:3478",},
+    {"urls" : "stun:stun.webcalldirect.com:3478",},
+    {"urls" : "stun:stun.whoi.edu:3478",},
+    {"urls" : "stun:stun.wifirst.net:3478",},
+    {"urls" : "stun:stun.wwdl.net:3478",},
+    {"urls" : "stun:stun.xs4all.nl:3478",},
+    {"urls" : "stun:stun.xtratelecom.es:3478",},
+    {"urls" : "stun:stun.yesss.at:3478",},
+    {"urls" : "stun:stun.zadarma.com:3478",},
+    {"urls" : "stun:stun.zadv.com:3478",},
+    {"urls" : "stun:stun.zoiper.com:3478",}
     /*
     {
       "urls": "turn:turn.jacknathan.tk:3478",
       "username": "ducanhzed",
       "credential": "1507200a",
     },
-
      */
   ],
-  'sdpSemantics': "unified-plan",
+ // 'sdpSemantics': "unified-plan",
 };
 
 late Socket socket;
@@ -150,7 +168,6 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver{
       });
 
       socket.on('INIT_PEER_RESP', (data) async {
-        _setRemoteDescription(data['sdp']);
         List<String> listSocketId = (data['sockets'] as List<dynamic>).map((e) => e.toString()).toList();
         await Future.forEach(listSocketId, (element) async {
           print("[KDH] ====================> init peer add other users $element");
@@ -175,6 +192,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver{
             setState(() {});
           });
         });
+        _setRemoteDescription(data['sdp']);
       });
 
       socket.on('INIT_NEW_PEER_RESP', (data) async {
@@ -203,6 +221,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver{
       socket.on('RECEIVE_PEER_RESP', (data) {
         int index = socketIdRemotes.indexWhere((element) => element['socketId'] == data['socketId']);
         if (index != -1) {
+          print("[KDH] ====================> receive sdp $index");
           _setRemoteDescriptionForReceive(index, data['sdp']);
         }
         setState(() {});
@@ -329,9 +348,6 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver{
     isAudioOn = true;
     isVideoOn = true;
     isConnected = false;
-    if(isAndroid) {
-      SystemChannels.platform.invokeMethod('SystemNavigator.pop');
-    }
     setState((){});
   }
 
