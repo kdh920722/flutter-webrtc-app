@@ -10,6 +10,7 @@ import '../../services/socket_emit.dart';
 
 bool isConnected = false;
 bool isAudioOn = true, isVideoOn = true;
+bool isScreenShareOn = false;
 String roomId = "";
 String myId = "";
 
@@ -64,6 +65,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver{
   List<Map<String, dynamic>> socketIdRemotes = [];
   RTC.RTCPeerConnection? _peerConnection;
   RTC.MediaStream? _localStream;
+  RTC.MediaStream? _localScreenStream;
   final RTC.RTCVideoRenderer _localRenderer = RTC.RTCVideoRenderer();
   bool _isSend = false;
   bool _isFrontCamera = true;
@@ -83,12 +85,14 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver{
     myId = "";
     roomId = "";
     isConnected = false;
+    isScreenShareOn = false;
     socket.disconnect();
     socket.dispose();
     socketIdRemotes.clear();
     roomIdTextEditingController.dispose();
     _peerConnection?.close();
     _localStream?.dispose();
+    _localScreenStream?.dispose();
     _localRenderer.dispose();
     _isSend = false;
     super.dispose();
@@ -298,6 +302,24 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver{
     return pc;
   }
 
+  Future<void> startScreenSharing() async {
+    final mediaConstraints = <String, dynamic>{'audio': true, 'video': true};
+
+    try {
+      var stream = await RTC.navigator.mediaDevices.getDisplayMedia(mediaConstraints);
+      _localStream = stream;
+      _localRenderer.srcObject = _localStream;
+
+    } catch (e) {
+      print(e.toString());
+    }
+  }
+
+  void stopScreenSharing() {
+    _localStream?.getTracks().forEach((track) => track.stop());
+    _localStream = null;
+  }
+
   Future sendInitPeer(
     String sdp,
   ) async {
@@ -348,6 +370,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver{
     isAudioOn = true;
     isVideoOn = true;
     isConnected = false;
+    isScreenShareOn = false;
     setState((){});
   }
 
@@ -361,15 +384,23 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver{
     setState(() {});
   }
 
+  _toggleScreenShare(){
+    _toggleCamera();
+    if(isVideoOn){
+      stopScreenSharing();
+    }else{
+      startScreenSharing();
+    }
+    setState(() {});
+  }
+
   _toggleCamera() {
     // change status
     isVideoOn = !isVideoOn;
-
     // enable or disable video track
     _localStream?.getVideoTracks().forEach((track) {
       track.enabled = isVideoOn;
     });
-    setState(() {});
   }
 
   @override
@@ -556,6 +587,23 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver{
                               child: Icon(isAudioOn ? Icons.mic : Icons.mic_off,
                                 color: Colors.black,
                                 size: size.width / 18.0)
+                            ),
+                          ),
+                          !isScreenShareOn? Container() : SizedBox(
+                            height: 8.0,
+                          ),
+                          !isScreenShareOn? Container() : GestureDetector(
+                            onTap: () => _toggleScreenShare(),
+                            child: Container(
+                                height: size.width * .125,
+                                width: size.width * .125,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  border: Border.all(color: Colors.amberAccent, width: 2.0),
+                                  color: Colors.amberAccent,
+                                ),
+                                alignment: Alignment.center,
+                                child: Icon(Icons.monitor, color: Colors.black, size: size.width / 18.0)
                             ),
                           ),
                           SizedBox(
