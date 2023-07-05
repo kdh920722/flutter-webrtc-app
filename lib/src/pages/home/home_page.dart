@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart' as RTC;
 import 'package:flutter_webrtc_app/src/pages/home/widgets/remote_view_card.dart';
@@ -63,6 +64,7 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> with WidgetsBindingObserver{
   List<Map<String, dynamic>> socketIdRemotes = [];
+  List<Map<String, String>> socketMessages = [];
   RTC.RTCPeerConnection? _peerConnection;
   RTC.MediaStream? _localStream;
   RTC.MediaStream? _localScreenStream;
@@ -72,6 +74,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver{
   bool get isiOS => foundation.defaultTargetPlatform == foundation.TargetPlatform.iOS;
   bool get isAndroid => foundation.defaultTargetPlatform == foundation.TargetPlatform.android;
   final roomIdTextEditingController = TextEditingController();
+  final messageTextEditingController = TextEditingController();
+  final messageListViewController = ScrollController();
 
   @override
   void initState() {
@@ -90,6 +94,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver{
     socket.dispose();
     socketIdRemotes.clear();
     roomIdTextEditingController.dispose();
+    messageTextEditingController.dispose();
+    messageListViewController.dispose();
     _peerConnection?.close();
     _localStream?.dispose();
     _localScreenStream?.dispose();
@@ -158,6 +164,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver{
       socket.on('CONNECTED_ID', (data) async {
         myId = data['socketId'];
         roomIdTextEditingController.text = "";
+        messageTextEditingController.text = "";
         initRenderers();
         _createPeerConnection().then((pc) async {
             _peerConnection = pc;
@@ -230,16 +237,29 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver{
         }
         setState(() {});
       });
-    });
 
-    socket.on('OUT_PEER_RESP', (data) {
-      String outUser = data['socketId'];
-      int index = socketIdRemotes.indexWhere((item) => item['socketId'] == outUser);
-      if (index != -1) {
-        socketIdRemotes.removeAt(index);
+      socket.on('MESSAGE_PEER_RESP', (data) {
+        String senderId = data['socketId'];
+        String senderMessage = data['message'];
+        print("[KDH] ====================> message senderId $senderId");
+        print("[KDH] ====================> message senderMessage $senderMessage");
+        socketMessages.add({
+          'senderId': senderId,
+          'senderMessage': senderMessage,
+        });
         setState(() {});
-      }
+      });
+
+      socket.on('OUT_PEER_RESP', (data) {
+        String outUser = data['socketId'];
+        int index = socketIdRemotes.indexWhere((item) => item['socketId'] == outUser);
+        if (index != -1) {
+          socketIdRemotes.removeAt(index);
+          setState(() {});
+        }
+      });
     });
+    // onConnected
 
     socket.onDisconnect((_){
       _endCall();
@@ -334,6 +354,14 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver{
     SocketEmit().sendReceivePeer(sdp, userId, otherUserId, roomId);
   }
 
+  Future sendMessagePeer(
+      String userId,
+      String message
+      ) async {
+    print("[KDH] ====================> SEND MESSAGE");
+    SocketEmit().sendMessagePeer(userId, roomId, message);
+  }
+
   _sendOutPeer() async {
     _endCall();
   }
@@ -364,6 +392,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver{
     socket.disconnect();
     _peerConnection?.close();
     socketIdRemotes.clear();
+    socketMessages.clear();
     _isSend = false;
     myId = "";
     roomId = "";
@@ -408,6 +437,13 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver{
     Size size = MediaQuery.of(context).size;
     double w = MediaQuery.of(context).size.width - MediaQuery.of(context).padding.left - MediaQuery.of(context).padding.right;
     double h = MediaQuery.of(context).size.height - MediaQuery.of(context).padding.top - MediaQuery.of(context).padding.bottom;
+
+    if(messageListViewController.positions.isNotEmpty){
+      SchedulerBinding.instance.addPostFrameCallback((_) {
+        messageListViewController.jumpTo(messageListViewController.position.maxScrollExtent);
+      });
+    }
+
     return Scaffold(
       appBar: AppBar(
         backgroundColor: Colors.amber,
@@ -445,7 +481,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver{
                   ),
                 ),
                 Positioned(
-                  bottom: 20.0,
+                  bottom: 50.0,
                   left: 12.0,
                   right: 0,
                   child: Container(
@@ -474,6 +510,87 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver{
                             },
                           ),
                   ),
+                ),
+                Positioned(
+                  top: 45.0,
+                  right: 15.0,
+                  child: !isConnected
+                      ? Container() : Container(
+                    width: size.width * .35,
+                    height: size.width* .56,
+                    decoration: BoxDecoration(
+                      color: Colors.white12,
+                      borderRadius: BorderRadius.circular(4.0),
+                      border: Border.all(
+                        color: Colors.amberAccent,
+                        width: 2.0,
+                      ),
+                    ),
+                    child: Column(mainAxisAlignment: MainAxisAlignment.start, children: [
+                      Container(color: Colors.white12, height: size.width* .56 * .8, child:
+                      socketMessages.isEmpty
+                          ? Container() : ListView.builder(
+                        controller: messageListViewController,
+                        scrollDirection: Axis.vertical,
+                        itemCount: socketMessages.length,
+                        itemBuilder: (context, index) {
+                          return Container(
+                            margin: const EdgeInsets.only(bottom: 2.0),
+                            child: Text("${socketMessages[index]['senderId']!.substring(0,5)} : ${socketMessages[index]['senderMessage']!}",
+                                style: const TextStyle(fontSize: 10, color: Colors.white)),
+                          );
+                        },
+                      ),
+                      ),
+                      Container(height: size.width* .56 * .18, child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        SizedBox(height: size.width* .56 * .18, width: size.width * .35 * .55, child:
+                        TextField(
+                          controller: messageTextEditingController,
+                          style: const TextStyle(color: Colors.grey),
+                          textAlign: TextAlign.center,
+                          cursorColor: Colors.grey,
+                          decoration: InputDecoration(
+                            hintText: "대화입력",
+                            hintStyle: const TextStyle(color: Colors.white38, fontSize: 10),
+                            alignLabelWithHint: true,
+                            enabledBorder: UnderlineInputBorder(
+                              borderSide: BorderSide(color: Colors.transparent),
+                            ),
+                            focusedBorder: UnderlineInputBorder(
+                              borderSide: BorderSide(color: Colors.transparent),
+                            ),
+                          ),
+                        ),
+                        ),
+                        SizedBox(width: size.width * .35 * .07),
+                        SizedBox(height: size.width* .56 * .18, width: size.width * .35 * .35, child:
+                        ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                              shape: RoundedRectangleBorder( //to set border radius to button
+                                  borderRadius: BorderRadius.circular(1)
+                              ),
+                              backgroundColor: Colors.amber
+                          ),
+                          child: const Text(
+                            "전송",
+                            style: TextStyle(
+                              fontSize: 10,
+                              color: Colors.black,
+                            ),
+                          ),
+                          onPressed: () {
+                            if(messageTextEditingController.text.trim() != ""){
+                              String message = messageTextEditingController.text;
+                              sendMessagePeer(myId, message);
+                              messageTextEditingController.text = "";
+                            }
+                          },
+                        )
+                        ),
+                      ])
+                      ),
+                    ])
+                  )
                 ),
                 Positioned(
                   top: 45.0,

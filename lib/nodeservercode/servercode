@@ -42,27 +42,27 @@ const iceServerList = [
       {urls: "stun:stun.zadv.com:3478",},
       {urls: "stun:stun.zoiper.com:3478",},
       {urls : "stun:stun.lowratevoip.com:3478",},
-{urls : "stun:stun.lugosoft.com:3478",},
-{urls : "stun:stun.lundimatin.fr:3478",},
-{urls : "stun:stun.magnet.ie:3478",},
-{urls : "stun:stun.manle.com:3478",},
-{urls : "stun:stun.mgn.ru:3478",},
-{urls : "stun:stun.mit.de:3478",},
-{urls : "stun:stun.mitake.com.tw:3478",},
-{urls : "stun:stun.miwifi.com:3478",},
-{urls : "stun:stun.modulus.gr:3478",},
-{urls : "stun:stun.mozcom.com:3478",},
-{urls : "stun:stun.myvoiptraffic.com:3478",},
-{urls : "stun:stun.mywatson.it:3478",},
-{urls : "stun:stun.nas.net:3478",},
-{urls : "stun:stun.neotel.co.za:3478",},
-{urls : "stun:stun.netappel.com:3478",},
-{urls : "stun:stun.netappel.fr:3478",},
-{urls : "stun:stun.netgsm.com.tr:3478",},
-{urls : "stun:stun.nfon.net:3478",},
-{urls : "stun:stun.noblogs.org:3478",},
-{urls : "stun:stun.noc.ams-ix.net:3478",},
-{urls : "stun:stun.node4.co.uk:3478",},
+      {urls : "stun:stun.lugosoft.com:3478",},
+      {urls : "stun:stun.lundimatin.fr:3478",},
+      {urls : "stun:stun.magnet.ie:3478",},
+      {urls : "stun:stun.manle.com:3478",},
+      {urls : "stun:stun.mgn.ru:3478",},
+      {urls : "stun:stun.mit.de:3478",},
+      {urls : "stun:stun.mitake.com.tw:3478",},
+      {urls : "stun:stun.miwifi.com:3478",},
+      {urls : "stun:stun.modulus.gr:3478",},
+      {urls : "stun:stun.mozcom.com:3478",},
+      {urls : "stun:stun.myvoiptraffic.com:3478",},
+      {urls : "stun:stun.mywatson.it:3478",},
+      {urls : "stun:stun.nas.net:3478",},
+      {urls : "stun:stun.neotel.co.za:3478",},
+      {urls : "stun:stun.netappel.com:3478",},
+      {urls : "stun:stun.netappel.fr:3478",},
+      {urls : "stun:stun.netgsm.com.tr:3478",},
+      {urls : "stun:stun.nfon.net:3478",},
+      {urls : "stun:stun.noblogs.org:3478",},
+      {urls : "stun:stun.noc.ams-ix.net:3478",},
+      {urls : "stun:stun.node4.co.uk:3478",},
     ];
 
 app.use(express.static("public"));
@@ -229,6 +229,19 @@ io.on("connection", function (socket) {
     });
   });
 
+  socket.on("MESSAGE_PEER_REQ", async function (data) {
+    console.log("message req : " + data.userId + " msg : " + data.message);
+
+    const roomIndex = roomList.findIndex((e) => e.roomId === data.roomId);
+    var userList = roomList[roomIndex].roomUserList;
+    userList.forEach(function(user) {
+      io.to(user.socketId).emit("MESSAGE_PEER_RESP", {
+        socketId: data.userId,
+        message: data.message
+      });
+    });
+  });
+
   socket.on("OUT_PEER_REQ", async function (data) {
     console.log("out info start ==========>");
     console.log(" out roomId : " + data.roomId);
@@ -283,7 +296,6 @@ io.on("connection", function (socket) {
           });
         });
       }
-
     }
   });
 
